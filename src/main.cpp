@@ -111,6 +111,7 @@ void setup()
   }
 
   Serial.println("Connected to the WiFi network");
+  Serial.println(WiFi. localIP());
 }
 
 void loop()
