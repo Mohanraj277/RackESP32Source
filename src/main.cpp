@@ -2,8 +2,8 @@
 #include <HTTPClient.h>
 #include <ESP32DMASPISlave.h>
 
-const char *ssid = "Maestro";
-const char *password = "Mwbsc@2023";
+const char *ssid = "Maestro";  //Maestro
+const char *password = "Mwbsc@2023";  //Mwbsc@2023
 
 static const uint32_t BUFFER_SIZE = 8192;
 uint8_t *spi_slave_tx_buf;
@@ -11,7 +11,9 @@ uint8_t *spi_slave_rx_buf;
 const int IRQpin = 12;
 
 String dataToSend = "";
-
+String status = "WiFi connected";
+String status1="WiFi not connected";
+String status2 = "Error on HTTP request";
 ESP32DMASPI::Slave slave;
 HTTPClient http;
 
@@ -27,7 +29,6 @@ void set_buffer()
 
 void esp32_Data_send()
 {
-  Serial.println("Schedule queue");
   // Clear the receive buffer
   memset(spi_slave_tx_buf, 0, BUFFER_SIZE);
 
@@ -43,21 +44,18 @@ void esp32_Data_send()
 
 void http_get_fun(String URLstr)
 {
-  Serial.println("URLstr: ");
-  Serial.println(URLstr);
   if ((WiFi.status() == WL_CONNECTED)) // Check the current connection status
   {
     HTTPClient http;
-    Serial.println("http Get");
     http.begin(URLstr);        // Specify the URL like http://cbe.themaestro.in/maestro_erp/webservice/getproductslocation/8
     int httpCode = http.GET(); // Make the request
 
     if (httpCode > 0) // Check for the returning code
     {
-      Serial.println("HTTP Success");
+      // Serial.println("HTTP Success");
       String payload = http.getString();
-      Serial.println(httpCode);
-      Serial.println(payload);
+      // Serial.println(httpCode);
+      // Serial.println(payload);
       if (httpCode == 200)
       {
         dataToSend = payload;
@@ -75,9 +73,54 @@ void http_get_fun(String URLstr)
     else
     {
       Serial.println("Error on HTTP request");
+      // Clear the receive buffer
+      memset(spi_slave_tx_buf, 0, BUFFER_SIZE);
+
+      status2.getBytes(spi_slave_tx_buf, BUFFER_SIZE);
+
+      slave.queue(spi_slave_rx_buf, spi_slave_tx_buf, BUFFER_SIZE);
+
+      digitalWrite(IRQpin, LOW);
+      delay(100);
+      digitalWrite(IRQpin, HIGH);
+      delay(100);
     }
     http.end(); // Free the resources
   }
+  else{
+    // Clear the receive buffer
+    memset(spi_slave_tx_buf, 0, BUFFER_SIZE);
+
+    status1.getBytes(spi_slave_tx_buf, BUFFER_SIZE);
+
+    slave.queue(spi_slave_rx_buf, spi_slave_tx_buf, BUFFER_SIZE);
+
+    digitalWrite(IRQpin, LOW);
+    delay(100);
+    digitalWrite(IRQpin, HIGH);
+    delay(100);
+  }
+}
+
+void status_update_fun()
+{
+  // Clear the receive buffer
+  memset(spi_slave_tx_buf, 0, BUFFER_SIZE);
+
+  status.getBytes(spi_slave_tx_buf, BUFFER_SIZE);
+
+  slave.queue(spi_slave_rx_buf, spi_slave_tx_buf, BUFFER_SIZE);
+
+  digitalWrite(IRQpin, LOW);
+  delay(100);
+  digitalWrite(IRQpin, HIGH);
+  delay(100);
+
+  // if there is no transaction in the queue, add a transaction
+  if (slave.remained() == 0)
+  {
+    slave.queue(spi_slave_rx_buf, spi_slave_tx_buf, BUFFER_SIZE);
+  }  
 }
 
 void setup()
@@ -109,7 +152,7 @@ void setup()
     delay(1000);
     Serial.println("Connecting to WiFi..");
   }
-
+  status_update_fun();
   Serial.println("Connected to the WiFi network");
   Serial.println(WiFi. localIP());
 }
@@ -119,13 +162,11 @@ void loop()
   // if there is no transaction in the queue, add a transaction
   if (slave.remained() == 0)
   {
-    Serial.println("receive QUEUE");
     slave.queue(spi_slave_rx_buf, spi_slave_tx_buf, BUFFER_SIZE);
   }
   while (slave.available())
   {
     String receivedString = "";
-    Serial.println("RECEIVE STRING");
     for (size_t i = 0; i < BUFFER_SIZE; ++i)
     {
       if (spi_slave_rx_buf[i] == '\0')
@@ -136,7 +177,7 @@ void loop()
     }
 
     // Show received data
-    Serial.println("Received: " + receivedString);
+    //Serial.println("Received: " + receivedString);
 
     // Clear the receive buffer
     memset(spi_slave_rx_buf, 0, BUFFER_SIZE);
